@@ -6,7 +6,6 @@
 <title>かんたんカレンダー</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic&display=swap" rel="stylesheet">
-<link rel="apple-touch-icon" href="icon.png">
 
 <style>
 body {
@@ -38,7 +37,7 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85em;
+  font-size: 0.8em;
   text-align: center;
   box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
@@ -46,11 +45,13 @@ h2 {
 .header {
   font-weight: bold;
   background: #e7edf3;
+  flex-direction: column;
+  font-size: 0.75em;
 }
 
 .time {
   background: #f0f3f5;
-  font-size: 0.75em;
+  font-size: 0.7em;
 }
 
 .task {
@@ -69,6 +70,7 @@ h2 {
 .matcha { background:#d9e4dd; }
 .sakura { background:#f3dede; }
 
+/* モーダル */
 .modal {
   position: fixed;
   top:0; left:0;
@@ -84,12 +86,6 @@ h2 {
   padding:20px;
   border-radius:20px;
   width:85%;
-  animation: pop 0.2s ease;
-}
-
-@keyframes pop {
-  from { transform: scale(0.9); opacity:0; }
-  to { transform: scale(1); opacity:1; }
 }
 
 input, select {
@@ -98,7 +94,6 @@ input, select {
   padding:10px;
   border-radius:12px;
   border:1px solid #ddd;
-  font-family: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', sans-serif;
 }
 
 button {
@@ -114,7 +109,7 @@ button {
 
 <body>
 
-<h2>かんたんカレンダー</h2>
+<h2 id="title">かんたんカレンダー</h2>
 
 <div class="grid" id="grid"></div>
 
@@ -135,47 +130,62 @@ button {
 </div>
 
 <script>
-const days = ["今日","明日","明後日"];
 const times = ["朝","昼","夕","夜"];
-
 const grid = document.getElementById("grid");
+
 let currentKey = "";
 
-// ✅ 安全な読み込み関数
-function loadData(key) {
-  const raw = localStorage.getItem(key);
-  if (!raw) return null;
+// 📅 日付生成
+function getDates(){
+  const result = [];
+  for(let i=0;i<3;i++){
+    const d = new Date();
+    d.setDate(d.getDate()+i);
+    const label = i===0?"今日":i===1?"明日":"明後日";
+    const dateStr = `${d.getMonth()+1}/${d.getDate()}`;
+    const key = d.toISOString().slice(0,10);
+    result.push({label,dateStr,key});
+  }
+  return result;
+}
 
-  try {
-    return JSON.parse(raw);
-  } catch(e) {
+// 💾 安全取得
+function loadData(key){
+  try{
+    return JSON.parse(localStorage.getItem(key));
+  }catch{
     return null;
   }
 }
 
-function build() {
-  grid.innerHTML = "";
+// 🧱 描画
+function build(){
+  grid.innerHTML="";
+  const dates = getDates();
 
   grid.appendChild(cell("", "header"));
 
-  days.forEach(d => grid.appendChild(cell(d,"header")));
+  dates.forEach(d=>{
+    const el = cell(`${d.label}\n${d.dateStr}`, "header");
+    el.style.whiteSpace="pre-line";
+    grid.appendChild(el);
+  });
 
-  times.forEach(t => {
+  times.forEach(t=>{
     grid.appendChild(cell(t,"time"));
 
-    days.forEach((d,di) => {
-      const key = di+"-"+t;
+    dates.forEach(d=>{
+      const key = d.key+"-"+t;
       const data = loadData(key);
 
-      const c = cell(data ? data.text : "", "task "+(data?.color||""));
-      c.onclick = () => openModal(key, d+" "+t, data);
-
+      const c = cell(data?data.text:"", "task "+(data?.color||""));
+      c.onclick = ()=>openModal(key, d.label+" "+t, data);
       grid.appendChild(c);
     });
   });
 }
 
-function cell(text, cls) {
+function cell(text, cls){
   const div = document.createElement("div");
   div.className = "cell "+cls;
   div.textContent = text;
@@ -184,24 +194,37 @@ function cell(text, cls) {
 
 function openModal(key,label,data){
   currentKey = key;
-  document.getElementById("modal").style.display="flex";
-  document.getElementById("target").textContent = label;
-  document.getElementById("text").value = data?.text || "";
-  document.getElementById("color").value = data?.color || "sax";
+  modal.style.display="flex";
+  target.textContent = label;
+  text.value = data?.text || "";
+  color.value = data?.color || "sax";
 }
 
 function closeModal(){
-  document.getElementById("modal").style.display="none";
+  modal.style.display="none";
 }
 
 function saveTask(){
-  const text = document.getElementById("text").value;
-  const color = document.getElementById("color").value;
-
-  localStorage.setItem(currentKey, JSON.stringify({text,color}));
+  const value = text.value;
+  const c = color.value;
+  if(value){
+    localStorage.setItem(currentKey, JSON.stringify({text:value,color:c}));
+  }
   closeModal();
   build();
 }
+
+// 🧹 長押しでリセット
+let timer;
+title.addEventListener("touchstart", ()=>{
+  timer = setTimeout(()=>{
+    if(confirm("全部消す？")){
+      localStorage.clear();
+      build();
+    }
+  }, 800);
+});
+title.addEventListener("touchend", ()=>clearTimeout(timer));
 
 build();
 </script>
