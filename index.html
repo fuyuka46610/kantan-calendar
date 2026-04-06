@@ -5,9 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>かんたんカレンダー</title>
 
-<!-- アイコン -->
 <link rel="apple-touch-icon" href="icon.png">
-
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic&display=swap" rel="stylesheet">
 
 <style>
@@ -43,9 +41,10 @@ h2 {
   font-size: 0.8em;
   text-align: center;
   box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  white-space: pre-line;
+  word-break: break-word;
 }
 
-/* 👇 統一カラー */
 .header,
 .time,
 .corner {
@@ -62,10 +61,6 @@ h2 {
   font-size: 0.7em;
 }
 
-.corner {
-  /* 左上セル用 */
-}
-
 .task {
   cursor: pointer;
   border: 1px dashed #d0d7de;
@@ -76,46 +71,51 @@ h2 {
   opacity: 0.7;
 }
 
-/* 🎨 カラー */
 .sax { background:#dce7ef; }
 .cream { background:#f6edc9; }
 .latte { background:#e8dcd5; }
 .matcha { background:#d9e4dd; }
 .sakura { background:#f3dede; }
 
-/* モーダル */
 .modal {
   position: fixed;
-  top:0; left:0;
-  width:100%; height:100%;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   background: rgba(0,0,0,0.25);
-  display:none;
-  align-items:center;
-  justify-content:center;
+  display: none;
+  align-items: center;
+  justify-content: center;
 }
 
 .modal-content {
-  background:white;
-  padding:20px;
-  border-radius:20px;
-  width:85%;
+  background: white;
+  padding: 20px;
+  border-radius: 20px;
+  width: 85%;
+  max-width: 380px;
+  box-sizing: border-box;
 }
 
 input, select {
-  width:100%;
-  margin-top:10px;
-  padding:10px;
-  border-radius:12px;
-  border:1px solid #ddd;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  box-sizing: border-box;
+  font: inherit;
 }
 
 button {
-  margin-top:10px;
-  width:100%;
-  padding:10px;
-  border:none;
-  border-radius:12px;
-  background:#e3e8ec;
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 12px;
+  background: #e3e8ec;
+  font: inherit;
 }
 </style>
 </head>
@@ -145,104 +145,179 @@ button {
 <script>
 const times = ["朝","昼","夕","夜"];
 const grid = document.getElementById("grid");
+const modal = document.getElementById("modal");
+const target = document.getElementById("target");
+const text = document.getElementById("text");
+const color = document.getElementById("color");
+const title = document.getElementById("title");
 
 let currentKey = "";
 
-// 📅 日付生成
-function getDates(){
+// 日本時間のローカル日付を YYYY-MM-DD 形式で作る
+function formatLocalDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// 今日・明日・明後日を生成
+function getDates() {
   const result = [];
-  for(let i=0;i<3;i++){
+  const labels = ["今日", "明日", "明後日"];
+
+  for (let i = 0; i < 3; i++) {
     const d = new Date();
-    d.setDate(d.getDate()+i);
-    const label = i===0?"今日":i===1?"明日":"明後日";
-    const dateStr = `${d.getMonth()+1}/${d.getDate()}`;
-    const key = d.toISOString().slice(0,10);
-    result.push({label,dateStr,key});
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + i);
+
+    result.push({
+      label: labels[i],
+      dateStr: `${d.getMonth() + 1}/${d.getDate()}`,
+      key: formatLocalDate(d)
+    });
   }
+
   return result;
 }
 
-// 💾 安全取得
-function loadData(key){
-  try{
+// 古い日の予定を自動削除
+function cleanupOldTasks() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayKey = formatLocalDate(today);
+
+  Object.keys(localStorage).forEach((key) => {
+    const match = key.match(/^(\d{4}-\d{2}-\d{2})-(朝|昼|夕|夜)$/);
+    if (!match) return;
+
+    const datePart = match[1];
+    if (datePart < todayKey) {
+      localStorage.removeItem(key);
+    }
+  });
+}
+
+// 安全に読み込み
+function loadData(key) {
+  try {
     return JSON.parse(localStorage.getItem(key));
-  }catch{
+  } catch {
     return null;
   }
 }
 
-// 🧱 描画
-function build(){
-  grid.innerHTML="";
+// セル生成
+function cell(textValue, cls) {
+  const div = document.createElement("div");
+  div.className = "cell " + cls;
+  div.textContent = textValue;
+  return div;
+}
+
+// 画面描画
+function build() {
+  cleanupOldTasks();
+  grid.innerHTML = "";
+
   const dates = getDates();
 
-  // 左上
   grid.appendChild(cell("", "corner"));
 
-  // 日付
-  dates.forEach(d=>{
+  dates.forEach((d) => {
     const el = cell(`${d.label}\n${d.dateStr}`, "header");
-    el.style.whiteSpace="pre-line";
     grid.appendChild(el);
   });
 
-  // 本体
-  times.forEach(t=>{
-    grid.appendChild(cell(t,"time"));
+  times.forEach((t) => {
+    grid.appendChild(cell(t, "time"));
 
-    dates.forEach(d=>{
-      const key = d.key+"-"+t;
+    dates.forEach((d) => {
+      const key = `${d.key}-${t}`;
       const data = loadData(key);
-
-      const c = cell(data?data.text:"", "task "+(data?.color||""));
-      c.onclick = ()=>openModal(key, d.label+" "+t, data);
+      const c = cell(data ? data.text : "", "task " + (data?.color || ""));
+      c.onclick = () => openModal(key, `${d.label} ${t}`, data);
       grid.appendChild(c);
     });
   });
 }
 
-function cell(text, cls){
-  const div = document.createElement("div");
-  div.className = "cell "+cls;
-  div.textContent = text;
-  return div;
-}
-
-function openModal(key,label,data){
+function openModal(key, label, data) {
   currentKey = key;
-  modal.style.display="flex";
+  modal.style.display = "flex";
   target.textContent = label;
   text.value = data?.text || "";
   color.value = data?.color || "sax";
 }
 
-function closeModal(){
-  modal.style.display="none";
+function closeModal() {
+  modal.style.display = "none";
 }
 
-function saveTask(){
-  const value = text.value;
+function saveTask() {
+  const value = text.value.trim();
   const c = color.value;
-  if(value){
-    localStorage.setItem(currentKey, JSON.stringify({text:value,color:c}));
+
+  if (value) {
+    localStorage.setItem(currentKey, JSON.stringify({ text: value, color: c }));
+  } else {
+    localStorage.removeItem(currentKey);
   }
+
   closeModal();
   build();
 }
 
-// 長押しリセット
+// モーダル外タップで閉じる
+modal.addEventListener("click", (e) => {
+  if (e.target === modal) {
+    closeModal();
+  }
+});
+
+// 日付が変わったら自動で再描画
+function scheduleMidnightRefresh() {
+  const now = new Date();
+  const next = new Date();
+  next.setHours(24, 0, 1, 0);
+
+  const ms = next - now;
+
+  setTimeout(() => {
+    build();
+    scheduleMidnightRefresh();
+  }, ms);
+}
+
+// 長押しで全削除
 let timer;
-title.addEventListener("touchstart", ()=>{
-  timer = setTimeout(()=>{
-    if(confirm("全部消す？")){
+title.addEventListener("touchstart", () => {
+  timer = setTimeout(() => {
+    if (confirm("全部消す？")) {
       localStorage.clear();
       build();
     }
   }, 800);
 });
-title.addEventListener("touchend", ()=>clearTimeout(timer));
+
+title.addEventListener("touchend", () => clearTimeout(timer));
+title.addEventListener("touchcancel", () => clearTimeout(timer));
+
+// PC用にも少し対応
+title.addEventListener("mousedown", () => {
+  timer = setTimeout(() => {
+    if (confirm("全部消す？")) {
+      localStorage.clear();
+      build();
+    }
+  }, 800);
+});
+
+title.addEventListener("mouseup", () => clearTimeout(timer));
+title.addEventListener("mouseleave", () => clearTimeout(timer));
 
 build();
+scheduleMidnightRefresh();
 </script>
 
 </body>
